@@ -31,3 +31,15 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Container ###
+
+database/
+
+### Environment ###
+
+.env
+
+### Spring Boot Properties ##
+
+application-local.properties
