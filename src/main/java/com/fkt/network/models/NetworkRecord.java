@@ -1,9 +1,10 @@
 package com.fkt.network.models;
 
 
-import lombok.*;
+import  lombok.*;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.mapping.Field;
 import org.springframework.lang.Nullable;
 
 @Document
@@ -24,7 +25,8 @@ public class NetworkRecord {
     @NonNull
     private String inputPort;
     @NonNull
-    private String protocol;
+    @Field
+    private String protocol = "TCP";
 
     @Nullable
     private String note;
