@@ -1,0 +1,75 @@
+version: '3'
+
+services:
+  backend:
+    image: fan9704/iptable_controller_backend
+    environment:
+      - MONGO_DB_HOST=${MONGO_DB_HOST}
+      - MONGO_DB_PORT=${MONGO_DB_PORT}
+      - MONGO_DB_USERNAME=${MONGO_DB_USERNAME}
+      - MONGO_DB_PASSWORD=${MONGO_DB_PASSWORD}
+      - MONGO_DB_DATABASE=network
+    depends_on:
+      - mongodb
+    ports:
+      - "0.0.0.0:9990:9990"
+    networks:
+      - MONGO
+
+  mongodb:
+    image: mongo
+    container_name: mongodb
+    restart: always
+    networks:
+      - MONGO
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_DB_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_DB_DATABASE}
+      TZ: Asia/Taipei
+    volumes:
+      - ./database/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+      - ./database/configdb:/data/configdb
+      - ./database/data:/data/db
+      - ./mongod.conf:/etc/mongo/mongod.conf
+#    command: >
+#      /bin/bash -c
+#      "mongo --host mongo --authenticationDatabase admin -u root -p 123456 --eval \"
+#        db = db.getSiblingDB('admin');
+#        db.createUser({
+#          user: 'test',
+#          pwd: '123456',
+#          roles: [
+#            {role: 'readWrite', db: 'network'},
+#            {role: 'readWrite', db: 'network', collection: 'network'}
+#          ]
+#        });
+#      \""
+    ports:
+      - '0.0.0.0:27017:27017'
+  mongo-express:
+    image: mongo-express
+    restart: always
+    networks:
+      - MONGO
+    environment:
+      ME_CONFIG_MONGODB_SERVER: mongodb
+      ME_CONFIG_MONGODB_PORT: ${MONGO_DB_PORT}
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGO_DB_USERNAME}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGO_DB_PASSWORD}
+      VCAP_APP_PORT: ${MONGO_EXPRESS_EXPORT_PORT}
+      ME_CONFIG_BASICAUTH_USERNAME: ${MONGO_EXPRESS_USERNAME}
+      ME_CONFIG_BASICAUTH_PASSWORD: ${MONGO_EXPRESS_PASSWORD}
+    depends_on:
+      - mongodb
+    ports:
+      - '0.0.0.0:8081:8081'
+
+
+networks:
+  MONGO:
+    driver: bridge
+
+volumes:
+  MONGO_DATA:
+  MONGO_CONFIG:

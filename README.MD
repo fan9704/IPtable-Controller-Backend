@@ -23,3 +23,38 @@ Proxy 的設定稍微麻煩一點，不! 其實是我懶
 通常是要搭配有網域，對於沒有網域的情境實在是無法做
 
 最終作者選擇最後一項方式自訂義 iptables 並且搭配網頁來協助操作
+
+---
+
+## Docker Usage
+
+### Packed to jar
+
+```shell
+mvn clean package
+```
+
+### Packed to Docker Image
+
+```shell=
+docker build -t iptable_controller_backend .
+```
+
+### Environment Variables
+
+```env=
+
+```
+
+### Run Docker Container
+
+```shell
+docker run -p 9990:9990 --link mongodb iptable_controller_backend
+```
+
+
+### Push to Docker Hub
+
+```shell
+docker push fan9704/iptable_controller_backend:tagname
+```

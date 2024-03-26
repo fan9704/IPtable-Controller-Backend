@@ -2,11 +2,11 @@ package com.fkt.network.services;
 
 import com.fkt.network.dtos.ExecuteCommandRequestDTO;
 import com.fkt.network.dtos.NetworkRecordCreateDTO;
+import com.fkt.network.dtos.request.NetworkRecordRequestDTO;
 import com.fkt.network.dtos.response.ExecuteCommandResponseDTO;
 import com.fkt.network.models.NetworkRecord;
 import com.fkt.network.repositories.NetworkRecordRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.ComponentScan;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -14,8 +14,9 @@ import org.springframework.stereotype.Service;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.OutputStream;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 
 @Service
 public class NetworkRecordService {
@@ -28,13 +29,70 @@ public class NetworkRecordService {
     public ResponseEntity<List<NetworkRecord>> findAllNetworkRecord(){
         return new ResponseEntity<>(this.repository.findAll(), HttpStatus.OK);
     }
-
     public ResponseEntity<NetworkRecord> create_service(NetworkRecordCreateDTO dto){
         if(this.create_nat_service(dto) == null){
             return new ResponseEntity<>(this.create_nat_service(dto), HttpStatus.BAD_REQUEST);
         }else{
             return new ResponseEntity<>(this.create_nat_service(dto), HttpStatus.CREATED);
         }
+    }
+
+    public ResponseEntity<NetworkRecord> find_network_record_by_id(String id){
+        Optional<NetworkRecord> optionalNetworkRecord =this.repository.findById(id);
+        return optionalNetworkRecord.map(networkRecord -> new ResponseEntity<>(networkRecord, HttpStatus.OK)).orElseGet(() -> new ResponseEntity<>(null, HttpStatus.NOT_FOUND));
+    }
+
+    public ResponseEntity<NetworkRecord> patch_network_record_by_id(String id, NetworkRecordRequestDTO dto){
+        Optional<NetworkRecord> optionalNetworkRecord =this.repository.findById(id);
+        if(optionalNetworkRecord.isPresent()){
+            NetworkRecord networkRecord=optionalNetworkRecord.get();
+            networkRecord=this.editNetworkRecord(networkRecord,dto);
+            return new ResponseEntity<>(this.repository.save(networkRecord),HttpStatus.OK);
+        }else{
+            return new ResponseEntity<>(null,HttpStatus.NOT_FOUND);
+        }
+    }
+    public ResponseEntity delete_network_record_by_id(String id){
+        Optional<NetworkRecord> optionalNetworkRecord =this.repository.findById(id);
+        if(optionalNetworkRecord.isPresent()){
+            this.repository.deleteById(id);
+            return new ResponseEntity<>(HttpStatus.OK);
+        }else{
+            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        }
+    }
+
+    // Utils API
+    private NetworkRecord editNetworkRecord(NetworkRecord networkRecord,NetworkRecordRequestDTO dto) {
+        if(!Objects.equals(dto.getInputIp(), "")){
+            networkRecord.setInputIp(dto.getInputIp());
+        }
+        if(!Objects.equals(dto.getInputPort(), "")){
+            networkRecord.setInputPort(dto.getInputPort());
+        }
+        if (!Objects.equals(dto.getOutputPort(), "")) {
+            networkRecord.setOutputIp(dto.getOutputIp());
+        }
+        if (!Objects.equals(dto.getOutputPort(), "")) {
+            networkRecord.setOutputPort(dto.getOutputPort());
+        }
+        if (!Objects.equals(dto.getNote(), "")){
+            networkRecord.setNote(dto.getNote());
+        }
+        if (!Objects.equals(dto.getProtocol(), "")){
+            networkRecord.setProtocol(dto.getProtocol());
+        }
+
+        networkRecord.setFullNetworkRecord(this.getFullNetworkRecord(networkRecord));
+        return networkRecord;
+    }
+    private String getFullNetworkRecord(NetworkRecord networkRecord){
+        return String.format("%s:%s:%s:%s",
+                networkRecord.getOutputPort(),
+                networkRecord.getOutputIp(),
+                networkRecord.getInputPort(),
+                networkRecord.getInputIp()
+        );
     }
 
     public NetworkRecord create_nat_service(NetworkRecordCreateDTO dto){
@@ -45,7 +103,7 @@ public class NetworkRecordService {
                 dto.getInputPort(),
                 dto.getInputIp()
         );
-        Boolean repeated = this.check_repeat_record(fullNetworkRecord);
+        boolean repeated = this.check_repeat_record(fullNetworkRecord);
         if(repeated){
             return null;
         }
@@ -110,17 +168,13 @@ public class NetworkRecordService {
     }
     public boolean check_repeat_record(String fullNetworkRecord){
         List<NetworkRecord> networkRecordList=this.repository.findByFullNetworkRecordIs(fullNetworkRecord);
-        if(networkRecordList.size() != 0){
-            return true;
-        }else{
-            return false;
-        }
+        return !networkRecordList.isEmpty();
     }
     // Execute Command
     public Boolean execute_command(String originCommand){
         String system=System.getProperty("os.name");
         boolean isWindows = system.contains("Windows");
-        String[] command = null;
+        String[] command;
         if(isWindows){
             System.out.println("Windows System");
             command = ("cmd.exe /c "+originCommand).split(" ") ;
@@ -130,7 +184,7 @@ public class NetworkRecordService {
         }
         ProcessBuilder builder = new ProcessBuilder();
         builder.command(command);
-        String response = "";
+        StringBuilder response = new StringBuilder();
         boolean status;
 
         try{
@@ -139,9 +193,9 @@ public class NetworkRecordService {
             status = true;
 
             BufferedReader buffer = new BufferedReader(new InputStreamReader(process.getInputStream()));
-            String str = null;
+            String str;
             while((str=(buffer.readLine()))!=null){
-                response+=str;
+                response.append(str);
             }
             System.out.println(response);
 
@@ -155,7 +209,7 @@ public class NetworkRecordService {
     public ResponseEntity<ExecuteCommandResponseDTO> execute_command(ExecuteCommandRequestDTO dto){
         String system=System.getProperty("os.name");
         boolean isWindows = system.contains("Windows");
-        String[] command = null;
+        String[] command;
         if(isWindows){
             System.out.println("Windows System");
             command = ("cmd.exe /c "+dto.getCommand()).split(" ") ;
@@ -166,32 +220,31 @@ public class NetworkRecordService {
         ExecuteCommandResponseDTO responseDTO = new ExecuteCommandResponseDTO();
         ProcessBuilder builder = new ProcessBuilder();
         builder.command(command);
-        String response = "";
+        StringBuilder response = new StringBuilder();
         HttpStatus httpStatus;
-        Boolean status;
+        boolean status;
         try{
             Process process = builder.start();
             process.waitFor();
-            OutputStream outputStream =process.getOutputStream();
             status = true;
             httpStatus = HttpStatus.OK;
 
             BufferedReader buffer = new BufferedReader(new InputStreamReader(process.getInputStream()));
-            String str = null;
+            String str;
             while((str=(buffer.readLine()))!=null){
-                response+=str;
+                response.append(str);
             }
 
         } catch (IOException | InterruptedException e) {
             e.printStackTrace();
             System.out.println(e);
-            response = "Not success";
+            response = new StringBuilder("Not success");
             status = false;
             httpStatus = HttpStatus.INTERNAL_SERVER_ERROR;
         }
-        responseDTO.setResponse(response);
+        responseDTO.setResponse(response.toString());
         responseDTO.setStatus(status);
-        return new ResponseEntity<ExecuteCommandResponseDTO>(responseDTO, httpStatus);
+        return new ResponseEntity<>(responseDTO, httpStatus);
     }
 
 
