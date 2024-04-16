@@ -1,0 +1,54 @@
+#Workflow name
+name: Dev CI/CD Pipeline
+on:
+  #Manually trigger workflow runs
+  workflow_dispatch:
+  #Trigger the workflow on push from the main branch
+  pull_request:
+    branches: [master,dev]
+jobs:
+  #Test's job
+  tests:
+    name: Unit tests
+    #Run on Ubuntu using the latest version
+    runs-on: ubuntu-latest
+    env:
+      ENV: "dev"
+    #Job's steps
+    steps:
+      #Check-out your repository under $GITHUB_WORKSPACE, so your workflow can access it
+      - name: Checkout Code
+      - uses: actions/checkout@v3
+      - name: Create env file
+        run: |
+          echo "${{ env.ENV_FILE }}" > .env
+          source .env
+      # Start MongoDB
+      - name: Start MongoDB
+        uses: supercharge/mongodb-github-action@1.10.0
+        with:
+          mongodb-replica-set: test-rs
+          mongodb-port: 27017
+          mongodb-username: test
+          mongodb-password: 123456
+          mongodb-db: network
+
+      #Set up JDK 17
+      - name: Set up JDK
+        uses: actions/setup-java@v1
+        with:
+          java-version: '17'
+      #Set up Maven cache
+      - name: Cache Maven packages
+        #This action allows caching dependencies and build outputs to improve workflow execution time.
+        uses: actions/cache@v1
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+      #Migrate Database
+#      - name: Migrate Database
+#        run: mvn flyway:migrate
+      #Run Tests
+      - name: Run Tests
+        run: mvn -B test
