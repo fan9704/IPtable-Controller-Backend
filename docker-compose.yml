@@ -11,10 +11,7 @@ services:
       - MONGO_DB_DATABASE=network
     depends_on:
       - mongodb
-    ports:
-      - "0.0.0.0:9990:9990"
-    networks:
-      - MONGO
+    network_mode: "host"
 
   mongodb:
     image: mongo

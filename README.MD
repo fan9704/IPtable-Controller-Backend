@@ -36,20 +36,30 @@ mvn clean package
 
 ### Packed to Docker Image
 
-```shell=
+```shell
 docker build -t iptable_controller_backend .
 ```
 
 ### Environment Variables
 
-```env=
-
+```shell
+# Application Config
+PROFILE_ACTIVE=dev
+# Database
+MONGO_DB_HOST=127.0.0.1
+MONGO_DB_USERNAME=test
+MONGO_DB_PASSWORD=123456
+MONGO_DB_DATABASE=network
+MONGO_DB_PORT=27017
+MONGO_EXPRESS_EXPORT_PORT=8081
+MONGO_EXPRESS_USERNAME=test
+MONGO_EXPRESS_PASSWORD=123456
 ```
 
 ### Run Docker Container
 
 ```shell
-docker run -p 9990:9990 --link mongodb iptable_controller_backend
+docker run -p 9990:9990  --network=host --link mongodb iptable_controller_backend
 ```
 
 
@@ -57,4 +67,24 @@ docker run -p 9990:9990 --link mongodb iptable_controller_backend
 
 ```shell
 docker push fan9704/iptable_controller_backend:tagname
+```
+
+---
+
+## PS
+
+### Get Host Network IP
+
+**You Can Change Your Network Device ID replace vmbr0**
+
+```shell=
+echo `ifconfig  vmbr0 | head -n2 | grep inet | awk '{print$2}'`
+```
+
+### Host with Docker
+
+```shell=
+docker run --network=host --privileged --cap-add=NET_ADMIN -d fan9704/iptable_controller_backend  
+# If need edit env please add -e MONGO_DB_HOST=XX.XX.XX.XX
+
 ```
