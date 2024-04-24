@@ -7,6 +7,7 @@ import com.fkt.network.dtos.response.ExecuteCommandResponseDTO;
 import com.fkt.network.models.NetworkRecord;
 import com.fkt.network.repositories.NetworkRecordRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -20,16 +21,20 @@ import java.util.Optional;
 
 @Service
 public class NetworkRecordService {
+    @Value("${docker.enabled:true}")
+    private Boolean dockerEnabled ;
     private NetworkRecordRepository repository;
+    private NATService natService;
     @Autowired
-    public NetworkRecordService(NetworkRecordRepository repository){
+    public NetworkRecordService(NetworkRecordRepository repository,NATService natService){
         this.repository = repository;
+        this.natService = natService;
     }
 
     public ResponseEntity<List<NetworkRecord>> findAllNetworkRecord(){
         return new ResponseEntity<>(this.repository.findAll(), HttpStatus.OK);
     }
-    public ResponseEntity<NetworkRecord> create_service(NetworkRecordCreateDTO dto){
+    public ResponseEntity<NetworkRecord> create_service(NetworkRecordCreateDTO dto) throws IOException {
         if(this.create_nat_service(dto) == null){
             return new ResponseEntity<>(this.create_nat_service(dto), HttpStatus.BAD_REQUEST);
         }else{
@@ -46,23 +51,14 @@ public class NetworkRecordService {
         Optional<NetworkRecord> optionalNetworkRecord =this.repository.findById(id);
         if(optionalNetworkRecord.isPresent()){
             NetworkRecord networkRecord=optionalNetworkRecord.get();
+            // Patch Network Record
             networkRecord=this.editNetworkRecord(networkRecord,dto);
             return new ResponseEntity<>(this.repository.save(networkRecord),HttpStatus.OK);
         }else{
             return new ResponseEntity<>(null,HttpStatus.NOT_FOUND);
         }
     }
-    public ResponseEntity delete_network_record_by_id(String id){
-        Optional<NetworkRecord> optionalNetworkRecord =this.repository.findById(id);
-        if(optionalNetworkRecord.isPresent()){
-            this.repository.deleteById(id);
-            return new ResponseEntity<>(HttpStatus.OK);
-        }else{
-            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
-        }
-    }
 
-    // Utils API
     private NetworkRecord editNetworkRecord(NetworkRecord networkRecord,NetworkRecordRequestDTO dto) {
         if(!Objects.equals(dto.getInputIp(), "")){
             networkRecord.setInputIp(dto.getInputIp());
@@ -86,23 +82,11 @@ public class NetworkRecordService {
         networkRecord.setFullNetworkRecord(this.getFullNetworkRecord(networkRecord));
         return networkRecord;
     }
-    private String getFullNetworkRecord(NetworkRecord networkRecord){
-        return String.format("%s:%s:%s:%s",
-                networkRecord.getOutputPort(),
-                networkRecord.getOutputIp(),
-                networkRecord.getInputPort(),
-                networkRecord.getInputIp()
-        );
-    }
 
-    public NetworkRecord create_nat_service(NetworkRecordCreateDTO dto){
+
+    public NetworkRecord create_nat_service(NetworkRecordCreateDTO dto) throws IOException {
         // Check Rule is repeat
-        String fullNetworkRecord = String.format("%s:%s:%s:%s",
-                dto.getOutputPort(),
-                dto.getOutputIp(),
-                dto.getInputPort(),
-                dto.getInputIp()
-        );
+        String fullNetworkRecord = this.getFullNetworkRecord(dto);
         boolean repeated = this.check_repeat_record(fullNetworkRecord);
         if(repeated){
             return null;
@@ -117,106 +101,72 @@ public class NetworkRecordService {
             return null;
         }
     }
+    public ResponseEntity<?> delete_nat_service(String id) throws IOException {
+        Optional<NetworkRecord>networkRecordOptional = this.repository.findById(id);
+        if(networkRecordOptional.isPresent()){
+            NetworkRecord networkRecord = networkRecordOptional.get();
+            NetworkRecordCreateDTO dto = this.networkRecordToDTO(networkRecord);
+            // Delete Rules
+            Boolean delete_prerouting_success=this.natService.execute_delete_nat_prerouting(dto);
+            Boolean delete_postrouting_success=this.natService.execute_delete_nat_postrouting(dto);
 
-    private static NetworkRecord getNetworkRecord(NetworkRecordCreateDTO dto, String fullNetworkRecord) {
-        NetworkRecord networkRecord = new NetworkRecord();
 
-        networkRecord.setInputIp(dto.getInputIp());
-        networkRecord.setInputPort(dto.getInputPort());
-        networkRecord.setOutputIp(dto.getOutputIp());
-        networkRecord.setOutputPort(dto.getOutputPort());
-        networkRecord.setNote(dto.getNote());
-        networkRecord.setProtocol(dto.getProtocol());
-        networkRecord.setFullNetworkRecord(fullNetworkRecord);
-        return networkRecord;
+            if(delete_prerouting_success && delete_postrouting_success){
+                this.repository.deleteById(id);
+                return new ResponseEntity<>(null,HttpStatus.OK);
+            }else{
+                return new ResponseEntity<>(null,HttpStatus.INTERNAL_SERVER_ERROR);
+            }
+        }else{
+            return new ResponseEntity<>(null,HttpStatus.INTERNAL_SERVER_ERROR);
+        }
     }
 
-    public Boolean execute_create_nat_command(NetworkRecordCreateDTO dto){
-        String preRoutingCommand= String.format(
-                "iptables -t nat -A PREROUTING -p tcp --dport %s -j DNAT --to-destination %s:%s",
-                dto.getOutputPort(),
-                dto.getInputIp(),
-                dto.getInputPort()
-        );
-        System.out.println(preRoutingCommand);
-        Boolean preRoutingCommandStatus =this.execute_command(preRoutingCommand);
-        if(!preRoutingCommandStatus){
+
+    public ResponseEntity<ExecuteCommandResponseDTO> findAllIptablesRules(){
+        ExecuteCommandResponseDTO responseDTO;
+        responseDTO = this.natService.findAllIptablesRules();
+        if(responseDTO.getStatus()){
+            return new ResponseEntity<>(responseDTO,HttpStatus.OK);
+        }else{
+            return new ResponseEntity<>(responseDTO,HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+    public Boolean execute_create_nat_command(NetworkRecordCreateDTO dto) throws IOException {
+        Boolean preRoutingSuccess;
+        Boolean postRoutingSuccess;
+
+        try{
+            // PreRouting
+            preRoutingSuccess=this.natService.execute_create_nat_prerouting(dto);
+            // PostRouting
+            if(preRoutingSuccess){
+                postRoutingSuccess= this.natService.execute_create_nat_postrouting(dto);
+                return postRoutingSuccess;
+            }else{
+                return false;
+            }
+        }catch (IOException e){
             return false;
         }
-        String forwardCommand= String.format(
-                "iptables -A FORWARD -p tcp -d %s --dport %s -j ACCEPT",
-                dto.getInputIp(),
-                dto.getInputPort()
-        );
-        System.out.println(forwardCommand);
-        Boolean forwardCommandStatus = this.execute_command(forwardCommand);
-        if(!forwardCommandStatus){
-            String deletePreRoutingCommand = String.format(
-                    "iptables -t nat -D PREROUTING -p tcp --dport %s -j DNAT --to-destination %s:%s",
-                    dto.getOutputPort(),
-                    dto.getInputIp(),
-                    dto.getInputPort()
-            );
-            this.execute_command(
-                deletePreRoutingCommand
-            );
-            return false;
-        }
-
-        return true;
-
     }
     public boolean check_repeat_record(String fullNetworkRecord){
         List<NetworkRecord> networkRecordList=this.repository.findByFullNetworkRecordIs(fullNetworkRecord);
         return !networkRecordList.isEmpty();
     }
-    // Execute Command
-    public Boolean execute_command(String originCommand){
-        String system=System.getProperty("os.name");
-        boolean isWindows = system.contains("Windows");
-        String[] command;
-        if(isWindows){
-            System.out.println("Windows System");
-            command = ("cmd.exe /c "+originCommand).split(" ") ;
-        }else{
-            System.out.println("Linux System");
-            command = ("sh -c "+originCommand).split(" ") ;
-        }
-        ProcessBuilder builder = new ProcessBuilder();
-        builder.command(command);
-        StringBuilder response = new StringBuilder();
-        boolean status;
 
-        try{
-            Process process = builder.start();
-            process.waitFor();
-            status = true;
-
-            BufferedReader buffer = new BufferedReader(new InputStreamReader(process.getInputStream()));
-            String str;
-            while((str=(buffer.readLine()))!=null){
-                response.append(str);
-            }
-            System.out.println(response);
-
-        } catch (IOException | InterruptedException e) {
-            e.printStackTrace();
-            System.out.println(e);
-            status = false;
-        }
-        return status;
-    }
     public ResponseEntity<ExecuteCommandResponseDTO> execute_command(ExecuteCommandRequestDTO dto){
         String system=System.getProperty("os.name");
         boolean isWindows = system.contains("Windows");
-        String[] command;
+        String command;
         if(isWindows){
             System.out.println("Windows System");
-            command = ("cmd.exe /c "+dto.getCommand()).split(" ") ;
+            command = "cmd.exe /c "+dto.getCommand() ;
         }else{
             System.out.println("Linux System");
-            command = ("sh -c "+dto.getCommand()).split(" ") ;
+            command = dto.getCommand() ;
         }
+        System.out.println("Request Command"+command);
         ExecuteCommandResponseDTO responseDTO = new ExecuteCommandResponseDTO();
         ProcessBuilder builder = new ProcessBuilder();
         builder.command(command);
@@ -246,11 +196,51 @@ public class NetworkRecordService {
         responseDTO.setStatus(status);
         return new ResponseEntity<>(responseDTO, httpStatus);
     }
+    // Utils
+    private NetworkRecord getNetworkRecord(NetworkRecordCreateDTO dto, String fullNetworkRecord) {
+        NetworkRecord networkRecord = new NetworkRecord();
 
+        networkRecord.setInputIp(dto.getInputIp());
+        networkRecord.setInputPort(dto.getInputPort());
+        networkRecord.setOutputIp(dto.getOutputIp());
+        networkRecord.setOutputPort(dto.getOutputPort());
+        networkRecord.setNote(dto.getNote());
+        networkRecord.setProtocol(dto.getProtocol());
+        networkRecord.setFullNetworkRecord(fullNetworkRecord);
+        return networkRecord;
+    }
+    private NetworkRecordCreateDTO networkRecordToDTO(NetworkRecord networkRecord){
+        NetworkRecordCreateDTO dto = new NetworkRecordCreateDTO();
+        dto.setInputIp(networkRecord.getInputIp());
+        dto.setInputPort(networkRecord.getInputPort());
+        dto.setOutputIp(networkRecord.getOutputIp());
+        dto.setOutputPort(networkRecord.getOutputPort());
+        dto.setNote(networkRecord.getNote());
+        dto.setProtocol(networkRecord.getProtocol());
+        return dto;
+    }
+    private String getFullNetworkRecord(NetworkRecord networkRecord){
+        return String.format("%s:%s:%s:%s",
+                networkRecord.getOutputPort(),
+                networkRecord.getOutputIp(),
+                networkRecord.getInputPort(),
+                networkRecord.getInputIp()
+        );
+    }
+    private String getFullNetworkRecord(NetworkRecordCreateDTO dto){
+        return String.format("%s:%s:%s:%s",
+                dto.getOutputPort(),
+                dto.getOutputIp(),
+                dto.getInputPort(),
+                dto.getInputIp()
+        );
+    }
 
-    // SSH Service
-    public void ssh_macro(){
-
-//        networkRecord.setInputPort("22");
+    public String replaceIptablesToLegacy(String input) {
+        if (this.dockerEnabled) {
+            return input.replaceAll("iptables", "iptables-legacy");
+        } else {
+            return input;
+        }
     }
 }

@@ -66,7 +66,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
       - name: Build the Docker image
-        run: docker build . --file Dockerfile --tag ${{ secrets.DOCKERHUB_USERNAME }}/iptable_controller_backend
+        run: docker build . --file Dockerfile --tag ${{ secrets.DOCKERHUB_USERNAME }}/iptable_controller_backend:latest
 
       - name: Docker Push
         run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/iptable_controller_backend

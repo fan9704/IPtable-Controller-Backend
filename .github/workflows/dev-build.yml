@@ -52,3 +52,18 @@ jobs:
       #Run Tests
       - name: Run Tests
         run: mvn -B test
+      # Pack Application
+      - name: build mvn package
+        run: mvn clean package
+      # Build Docker Image
+      - name: DockerHub Login
+        uses: docker/login-action@v2.1.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+      - name: Build the Docker image
+        run: docker build . --file Dockerfile --tag ${{ secrets.DOCKERHUB_USERNAME }}/iptable_controller_backend:${{ github.run_number }}
+
+      - name: Docker Push
+        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/iptable_controller_backend:${{ github.run_number }}

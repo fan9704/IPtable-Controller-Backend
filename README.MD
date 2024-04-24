@@ -24,6 +24,20 @@ Proxy 的設定稍微麻煩一點，不! 其實是我懶
 
 最終作者選擇最後一項方式自訂義 iptables 並且搭配網頁來協助操作
 
+## System Architecture
+
+![](/doc/structure.png)
+
+---
+
+## Future Planning
+
+![](/doc/future-structure.png)
+
+### Description
+
+在大致建構好本專案之後，會希望配合 Proxmox VE 的分散式叢集管理方式，透過本系統一同進行叢集的網路 NAT 管理，因此為達成會需要透過 AMQP 來進行 Spring Boot Service 之間的訊息傳遞，最後構建一個 Master 的 Service 來彙整叢集內的所有 NAT 內容。
+
 ---
 
 ## Docker Usage
