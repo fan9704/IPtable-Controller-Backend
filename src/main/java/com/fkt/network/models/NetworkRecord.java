@@ -33,4 +33,13 @@ public class NetworkRecord {
 
     @NonNull
     private String fullNetworkRecord;
+
+    public void generateFullNetworkRecord(){
+        this.setFullNetworkRecord(String.format("%s:%s:%s:%s",
+                this.getOutputPort(),
+                this.getOutputIp(),
+                this.getInputPort(),
+                this.getInputIp()
+        ));
+    }
 }
