@@ -1,7 +1,7 @@
 # Base Image
-LABEL maintainer="fan9704"
-
 FROM fan9704/iptables-openjdk:17-slim
+
+LABEL maintainer="fan9704"
 
 WORKDIR /app
 COPY target/*.jar app.jar
