@@ -1,5 +1,5 @@
 # Base Image
-MAINTAINER fan9704
+MAINTAINER fan9704 <fan9704@github.com>
 FROM fan9704/iptables-openjdk:17-slim
 
 WORKDIR /app
