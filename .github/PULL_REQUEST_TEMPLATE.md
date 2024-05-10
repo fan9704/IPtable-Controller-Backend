@@ -1,4 +1,4 @@
-## 描述 Descriptino
+## 描述 Description
 
 **這支 PR 所做的事情，盡可能詳細取代本文字。 Replace this text and describe This PR doing(Better to be detail)**
 
