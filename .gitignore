@@ -43,3 +43,7 @@ database/
 ### Spring Boot Properties ##
 
 application-local.properties
+
+### Other libs ###
+
+/lib
