@@ -2,21 +2,23 @@ package com.fkt.network.services;
 
 import com.fkt.network.dtos.NetworkRecordCreateDTO;
 import com.fkt.network.dtos.response.ExecuteCommandResponseDTO;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 
 @Service
 public class NATService {
+    private CommandToolService service;
+    @Autowired
+    NATService(CommandToolService service){
+        this.service = service;
+    }
     // List
     public ExecuteCommandResponseDTO findAllIptablesRules(){
         try {
             ProcessBuilder processBuilder = new ProcessBuilder("iptables-legacy", "-t", "nat", "-L");
-            ExecuteCommandResponseDTO responseDTO = this.runIptablesCommandWithResponseDTO(processBuilder);
+            ExecuteCommandResponseDTO responseDTO = this.service.runIptablesCommandWithResponseDTO(processBuilder);
             return responseDTO;
         } catch (Exception e) {
             ExecuteCommandResponseDTO responseDTO = new ExecuteCommandResponseDTO();
@@ -36,7 +38,7 @@ public class NATService {
             // PostRouting
             ProcessBuilder processBuilder = new ProcessBuilder(
                     "iptables-legacy","-t","nat","-A","POSTROUTING","-p","tcp","--dport",inputIp,"--dport",inputPort,"j","SNAT","--to-source",outputIp);
-            return this.runIptablesCommand(processBuilder);
+            return this.service.runIptablesCommand(processBuilder);
         }catch (IOException | InterruptedException e){
             return false;
         }
@@ -50,7 +52,7 @@ public class NATService {
             String inputEndpoint = inputIp+":"+inputPort;
             ProcessBuilder processBuilder = new ProcessBuilder(
                     "iptables-legacy","-t","nat","-A","PREROUTING","-p","tcp","--dport",outputPort,"-j","DNAT","--to-destination",inputEndpoint);
-            return this.runIptablesCommand(processBuilder);
+            return this.service.runIptablesCommand(processBuilder);
         }catch (IOException | InterruptedException e){
             return false;
         }
@@ -63,7 +65,7 @@ public class NATService {
             // Forward
             ProcessBuilder processBuilder = new ProcessBuilder(
                     "iptables-legacy","-A","FORWARD","-p","tcp","-d",inputIp,"--dport",inputPort,"-j","ACCEPT");
-            return this.runIptablesCommand(processBuilder);
+            return this.service.runIptablesCommand(processBuilder);
         }catch (IOException | InterruptedException e){
             return false;
         }
@@ -77,7 +79,7 @@ public class NATService {
             // PostRouting
             ProcessBuilder processBuilder = new ProcessBuilder(
                     "iptables-legacy","-t","nat","-D","POSTROUTING","-p","tcp","--dport",inputIp,"--dport",inputPort,"j","SNAT","--to-source",outputIp);
-            return this.runIptablesCommand(processBuilder);
+            return this.service.runIptablesCommand(processBuilder);
         }catch (IOException | InterruptedException e){
             return false;
         }
@@ -91,7 +93,7 @@ public class NATService {
             String inputEndpoint = inputIp+":"+inputPort;
             ProcessBuilder processBuilder = new ProcessBuilder(
                     "iptables-legacy","-t","nat","-D","PREROUTING","-p","tcp","--dport",outputPort,"-j","DNAT","--to-destination",inputEndpoint);
-            return this.runIptablesCommand(processBuilder);
+            return this.service.runIptablesCommand(processBuilder);
         }catch (IOException | InterruptedException e){
             return false;
         }
@@ -103,52 +105,12 @@ public class NATService {
         try{
             ProcessBuilder processBuilder = new ProcessBuilder(
                     "iptables-legacy","-D","FORWARD","-p","tcp","-d",inputIp,"--dport",inputPort,"-j","ACCEPT");
-            return this.runIptablesCommand(processBuilder);
+            return this.service.runIptablesCommand(processBuilder);
         }catch (IOException | InterruptedException e){
             return false;
         }
     }
 
-    // Utils
-    public Boolean runIptablesCommand(ProcessBuilder processBuilder) throws IOException, InterruptedException {
-        Process process = processBuilder.start();
-
-        BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-        String line;
-        while ((line = reader.readLine()) != null) {
-            System.out.println(line);
-        }
-        BufferedReader errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
-        while ((line = errorReader.readLine()) != null) {
-            System.err.println(line);
-        }
-        int exitCode = process.waitFor();
-        System.out.println("Exit code: " + exitCode);
-        return exitCode == 0;
-    }
-    public ExecuteCommandResponseDTO runIptablesCommandWithResponseDTO(ProcessBuilder processBuilder) throws IOException, InterruptedException {
-        ExecuteCommandResponseDTO responseDTO = new ExecuteCommandResponseDTO();
-
-        Process process = processBuilder.start();
-        BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-
-        StringBuilder commandResponse = new StringBuilder();
-        String line;
-        while ((line = reader.readLine()) != null) {
-            System.out.println(line);
-            commandResponse.append(line).append("\n");
-        }
-        BufferedReader errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
-        while ((line = errorReader.readLine()) != null) {
-            System.err.println(line);
-        }
-        int exitCode = process.waitFor();
-        System.out.println("Exit code: " + exitCode);
-        responseDTO.setStatus(exitCode == 0);
-        responseDTO.setMessage("Complete Execute Command in ExitCode" + exitCode);
-        responseDTO.setResponse(commandResponse.toString());
-        return responseDTO;
-    }
     public String isAppendOrDeleteRules(Boolean is_append){
         return is_append ? "-A" : "-D";
     }
