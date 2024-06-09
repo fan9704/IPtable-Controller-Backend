@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: minio
+  name: minio
+  namespace: moonfdd
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+    spec:
+      containers:
+        - args:
+            - server
+            - /data
+            - '--console-address'
+            - ':9000'
+            - '--address'
+            - ':9090'
+          env:
+            - name: MINIO_ACCESS_KEY
+              value: admin
+            - name: MINIO_SECRET_KEY
+              value: moonfdd123
+          image: minio/minio
+          imagePullPolicy: IfNotPresent
+          name: minio
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: minio
+  name: minio
+  namespace: moonfdd
+spec:
+  ports:
+    - name: 9000-9000
+      port: 9000
+      protocol: TCP
+      targetPort: 9000
+  selector:
+    app: minio
+  type: NodePort

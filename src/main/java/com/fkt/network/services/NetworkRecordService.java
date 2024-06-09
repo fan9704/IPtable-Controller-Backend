@@ -35,10 +35,11 @@ public class NetworkRecordService {
         return new ResponseEntity<>(this.repository.findAll(), HttpStatus.OK);
     }
     public ResponseEntity<NetworkRecord> create_service(NetworkRecordCreateDTO dto) throws IOException {
-        if(this.create_nat_service(dto) == null){
-            return new ResponseEntity<>(this.create_nat_service(dto), HttpStatus.BAD_REQUEST);
+        NetworkRecord networkRecord=this.create_nat_service(dto);
+        if(networkRecord == null){
+            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
         }else{
-            return new ResponseEntity<>(this.create_nat_service(dto), HttpStatus.CREATED);
+            return new ResponseEntity<>(networkRecord, HttpStatus.CREATED);
         }
     }
 
@@ -98,6 +99,7 @@ public class NetworkRecordService {
             NetworkRecord networkRecord = getNetworkRecord(dto, fullNetworkRecord);
             return this.repository.save(networkRecord);
         }else{
+            System.out.println("Create NAT Rules to iptables failed");
             return null;
         }
     }
