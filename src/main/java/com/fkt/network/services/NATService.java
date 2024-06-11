@@ -3,6 +3,7 @@ package com.fkt.network.services;
 import com.fkt.network.dtos.NetworkRecordCreateDTO;
 import com.fkt.network.dtos.response.ExecuteCommandResponseDTO;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -10,6 +11,8 @@ import java.io.IOException;
 @Service
 public class NATService {
     private CommandToolService service;
+    @Value("${iptables.legacy}")
+    private Boolean legacy;
     @Autowired
     NATService(CommandToolService service){
         this.service = service;
@@ -17,7 +20,7 @@ public class NATService {
     // List
     public ExecuteCommandResponseDTO findAllIptablesRules(){
         try {
-            ProcessBuilder processBuilder = new ProcessBuilder("iptables-legacy", "-t", "nat", "-L");
+            ProcessBuilder processBuilder = new ProcessBuilder(this.isLegacyIptables(), "-t", "nat", "-L");
             ExecuteCommandResponseDTO responseDTO = this.service.runIptablesCommandWithResponseDTO(processBuilder);
             return responseDTO;
         } catch (Exception e) {
@@ -37,7 +40,7 @@ public class NATService {
         try{
             // PostRouting
             ProcessBuilder processBuilder = new ProcessBuilder(
-                    "iptables-legacy","-t","nat","-A","POSTROUTING","-p","tcp","--dport",inputIp,"--dport",inputPort,"j","SNAT","--to-source",outputIp);
+                    this.isLegacyIptables(),"-t","nat","-A","POSTROUTING","-p","tcp","--dport",inputIp,"--dport",inputPort,"j","SNAT","--to-source",outputIp);
             return this.service.runIptablesCommand(processBuilder);
         }catch (IOException | InterruptedException e){
             return false;
@@ -51,7 +54,7 @@ public class NATService {
             // PreRouting
             String inputEndpoint = inputIp+":"+inputPort;
             ProcessBuilder processBuilder = new ProcessBuilder(
-                    "iptables-legacy","-t","nat","-A","PREROUTING","-p","tcp","--dport",outputPort,"-j","DNAT","--to-destination",inputEndpoint);
+                    this.isLegacyIptables(),"-t","nat","-A","PREROUTING","-p","tcp","--dport",outputPort,"-j","DNAT","--to-destination",inputEndpoint);
             return this.service.runIptablesCommand(processBuilder);
         }catch (IOException | InterruptedException e){
             return false;
@@ -64,7 +67,7 @@ public class NATService {
         try{
             // Forward
             ProcessBuilder processBuilder = new ProcessBuilder(
-                    "iptables-legacy","-A","FORWARD","-p","tcp","-d",inputIp,"--dport",inputPort,"-j","ACCEPT");
+                    this.isLegacyIptables(),"-A","FORWARD","-p","tcp","-d",inputIp,"--dport",inputPort,"-j","ACCEPT");
             return this.service.runIptablesCommand(processBuilder);
         }catch (IOException | InterruptedException e){
             return false;
@@ -78,7 +81,7 @@ public class NATService {
         try{
             // PostRouting
             ProcessBuilder processBuilder = new ProcessBuilder(
-                    "iptables-legacy","-t","nat","-D","POSTROUTING","-p","tcp","--dport",inputIp,"--dport",inputPort,"j","SNAT","--to-source",outputIp);
+                    this.isLegacyIptables(),"-t","nat","-D","POSTROUTING","-p","tcp","--dport",inputIp,"--dport",inputPort,"j","SNAT","--to-source",outputIp);
             return this.service.runIptablesCommand(processBuilder);
         }catch (IOException | InterruptedException e){
             return false;
@@ -92,7 +95,7 @@ public class NATService {
             // PreRouting
             String inputEndpoint = inputIp+":"+inputPort;
             ProcessBuilder processBuilder = new ProcessBuilder(
-                    "iptables-legacy","-t","nat","-D","PREROUTING","-p","tcp","--dport",outputPort,"-j","DNAT","--to-destination",inputEndpoint);
+                    this.isLegacyIptables(),"-t","nat","-D","PREROUTING","-p","tcp","--dport",outputPort,"-j","DNAT","--to-destination",inputEndpoint);
             return this.service.runIptablesCommand(processBuilder);
         }catch (IOException | InterruptedException e){
             return false;
@@ -104,7 +107,7 @@ public class NATService {
         String inputPort = dto.getInputPort();
         try{
             ProcessBuilder processBuilder = new ProcessBuilder(
-                    "iptables-legacy","-D","FORWARD","-p","tcp","-d",inputIp,"--dport",inputPort,"-j","ACCEPT");
+                    this.isLegacyIptables(),"-D","FORWARD","-p","tcp","-d",inputIp,"--dport",inputPort,"-j","ACCEPT");
             return this.service.runIptablesCommand(processBuilder);
         }catch (IOException | InterruptedException e){
             return false;
@@ -113,5 +116,10 @@ public class NATService {
 
     public String isAppendOrDeleteRules(Boolean is_append){
         return is_append ? "-A" : "-D";
+    }
+    public String isLegacyIptables(){
+        String mode = this.legacy? "iptables-legacy" : "iptabales";
+        System.out.println("Mode:"+ mode);
+        return mode;
     }
 }

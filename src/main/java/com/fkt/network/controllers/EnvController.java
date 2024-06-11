@@ -32,6 +32,8 @@ public class EnvController {
     String host_ip;
     @Value("${iptables.operate}")
     String iptables_operate;
+    @Value("${iptables.legacy}")
+    Boolean iptables_legacy;
 
     @Operation(summary = "List all Config")
     @GetMapping("")
@@ -39,6 +41,7 @@ public class EnvController {
         EnvConfig envConfig = new EnvConfig();
         envConfig.setHost_ip(this.host_ip);
         envConfig.setIptables_operate(this.iptables_operate);
+        envConfig.setIptables_legacy(this.iptables_legacy);
         envConfig.setPve_host(this.pve_host);
         envConfig.setPve_username(this.pve_username);
         return new ResponseEntity<>(envConfig,HttpStatus.OK);
