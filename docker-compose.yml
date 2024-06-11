@@ -25,23 +25,10 @@ services:
       MONGO_INITDB_DATABASE: ${MONGO_DB_DATABASE}
       TZ: Asia/Taipei
     volumes:
-      - ./database/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
       - ./database/configdb:/data/configdb
       - ./database/data:/data/db
       - ./mongod.conf:/etc/mongo/mongod.conf
-#    command: >
-#      /bin/bash -c
-#      "mongo --host mongo --authenticationDatabase admin -u root -p 123456 --eval \"
-#        db = db.getSiblingDB('admin');
-#        db.createUser({
-#          user: 'test',
-#          pwd: '123456',
-#          roles: [
-#            {role: 'readWrite', db: 'network'},
-#            {role: 'readWrite', db: 'network', collection: 'network'}
-#          ]
-#        });
-#      \""
     ports:
       - '0.0.0.0:27017:27017'
   mongo-express:
