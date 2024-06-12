@@ -60,7 +60,7 @@ public class NetworkRecordController {
     }
     @Operation(summary = "Create NAT Iptables Service")
     @PostMapping("/nat/record")
-    public ResponseEntity<?> create_nat(@RequestBody NetworkRecordCreateDTO dto) throws IOException {
+    public ResponseEntity<?> create_nat(@RequestBody NetworkRecordCreateDTO dto) {
         return this.service.create_service(dto);
     }
     @Operation(summary = "Delete NAT Iptables Service")
