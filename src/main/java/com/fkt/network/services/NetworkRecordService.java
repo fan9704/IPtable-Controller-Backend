@@ -7,7 +7,6 @@ import com.fkt.network.dtos.response.ExecuteCommandResponseDTO;
 import com.fkt.network.models.NetworkRecord;
 import com.fkt.network.repositories.NetworkRecordRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -21,8 +20,6 @@ import java.util.Optional;
 
 @Service
 public class NetworkRecordService {
-    @Value("${docker.enabled:true}")
-    private Boolean dockerEnabled ;
     private NetworkRecordRepository repository;
     private NATService natService;
     @Autowired
@@ -34,12 +31,31 @@ public class NetworkRecordService {
     public ResponseEntity<List<NetworkRecord>> findAllNetworkRecord(){
         return new ResponseEntity<>(this.repository.findAll(), HttpStatus.OK);
     }
-    public ResponseEntity<NetworkRecord> create_service(NetworkRecordCreateDTO dto) throws IOException {
+    public ResponseEntity<NetworkRecord> create_service(NetworkRecordCreateDTO dto) {
         NetworkRecord networkRecord=this.create_nat_service(dto);
         if(networkRecord == null){
             return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
         }else{
             return new ResponseEntity<>(networkRecord, HttpStatus.CREATED);
+        }
+    }
+    public NetworkRecord create_nat_service(NetworkRecordCreateDTO dto) {
+        // Check Rule is repeat
+        String fullNetworkRecord = this.getFullNetworkRecord(dto);
+        boolean repeated = this.check_repeat_record(fullNetworkRecord);
+        if(repeated){
+            System.out.println("Network Record Repeat");
+            return null;
+        }
+        // Create NAT Service in Host
+        Boolean createNATStatus= this.execute_nat_command(dto);
+        if(createNATStatus){
+            // Save Record to database
+            NetworkRecord networkRecord = getNetworkRecord(dto, fullNetworkRecord);
+            return this.repository.save(networkRecord);
+        }else{
+            System.out.println("Create NAT Rules to iptables failed");
+            return null;
         }
     }
 
@@ -51,9 +67,9 @@ public class NetworkRecordService {
     public ResponseEntity<NetworkRecord> patch_network_record_by_id(String id, NetworkRecordRequestDTO dto){
         Optional<NetworkRecord> optionalNetworkRecord =this.repository.findById(id);
         if(optionalNetworkRecord.isPresent()){
-            NetworkRecord networkRecord=optionalNetworkRecord.get();
             // Patch Network Record
-            networkRecord=this.editNetworkRecord(networkRecord,dto);
+            NetworkRecord networkRecord=this.editNetworkRecord(optionalNetworkRecord.get(),dto);
+            // TODO: Update Iptables
             return new ResponseEntity<>(this.repository.save(networkRecord),HttpStatus.OK);
         }else{
             return new ResponseEntity<>(null,HttpStatus.NOT_FOUND);
@@ -85,40 +101,20 @@ public class NetworkRecordService {
     }
 
 
-    public NetworkRecord create_nat_service(NetworkRecordCreateDTO dto) throws IOException {
-        // Check Rule is repeat
-        String fullNetworkRecord = this.getFullNetworkRecord(dto);
-        boolean repeated = this.check_repeat_record(fullNetworkRecord);
-        if(repeated){
-            return null;
-        }
-        // Create NAT Service in Host
-        Boolean createNATStatus= this.execute_create_nat_command(dto);
-        if(createNATStatus){
-            // Save Record to database
-            NetworkRecord networkRecord = getNetworkRecord(dto, fullNetworkRecord);
-            return this.repository.save(networkRecord);
-        }else{
-            System.out.println("Create NAT Rules to iptables failed");
-            return null;
-        }
-    }
+
     public ResponseEntity<?> delete_nat_service(String id) throws IOException {
         Optional<NetworkRecord>networkRecordOptional = this.repository.findById(id);
         if(networkRecordOptional.isPresent()){
             NetworkRecord networkRecord = networkRecordOptional.get();
             NetworkRecordCreateDTO dto = this.networkRecordToDTO(networkRecord);
             // Delete Rules
-            Boolean delete_prerouting_success=this.natService.execute_delete_nat_prerouting(dto);
-            Boolean delete_postrouting_success=this.natService.execute_delete_nat_postrouting(dto);
+            Boolean delete_prerouting_success=this.natService.execute_nat_prerouting(dto,false);
+            Boolean delete_postrouting_success=this.natService.execute_nat_postrouting(dto,false);
+            System.out.println("Delete PREROUTEING:"+delete_prerouting_success);
+            System.out.println("Delete POSTROUTEING:"+delete_postrouting_success);
+            this.repository.deleteById(id);
+            return new ResponseEntity<>(null,HttpStatus.OK);
 
-
-            if(delete_prerouting_success && delete_postrouting_success){
-                this.repository.deleteById(id);
-                return new ResponseEntity<>(null,HttpStatus.OK);
-            }else{
-                return new ResponseEntity<>(null,HttpStatus.INTERNAL_SERVER_ERROR);
-            }
         }else{
             return new ResponseEntity<>(null,HttpStatus.INTERNAL_SERVER_ERROR);
         }
@@ -134,20 +130,15 @@ public class NetworkRecordService {
             return new ResponseEntity<>(responseDTO,HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
-    public Boolean execute_create_nat_command(NetworkRecordCreateDTO dto) throws IOException {
-        Boolean preRoutingSuccess;
-        Boolean postRoutingSuccess;
-
+    public Boolean execute_nat_command(NetworkRecordCreateDTO dto) {
         try{
             // PreRouting
-            preRoutingSuccess=this.natService.execute_create_nat_prerouting(dto);
+            Boolean createPreRoutingSuccess=this.natService.execute_nat_prerouting(dto,true);
             // PostRouting
-            if(preRoutingSuccess){
-                postRoutingSuccess= this.natService.execute_create_nat_postrouting(dto);
-                return postRoutingSuccess;
-            }else{
-                return false;
-            }
+            Boolean createPostRoutingSuccess= this.natService.execute_nat_postrouting(dto,true);
+            System.out.println("Create PREROUTEING:"+createPreRoutingSuccess);
+            System.out.println("Create POSTROUTEING:"+createPostRoutingSuccess);
+            return createPreRoutingSuccess && createPostRoutingSuccess;
         }catch (IOException e){
             return false;
         }
@@ -236,13 +227,5 @@ public class NetworkRecordService {
                 dto.getInputPort(),
                 dto.getInputIp()
         );
-    }
-
-    public String replaceIptablesToLegacy(String input) {
-        if (this.dockerEnabled) {
-            return input.replaceAll("iptables", "iptables-legacy");
-        } else {
-            return input;
-        }
     }
 }

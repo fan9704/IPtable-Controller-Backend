@@ -12,7 +12,7 @@ import java.io.IOException;
 public class NATService {
     private CommandToolService service;
     @Value("${iptables.legacy}")
-    private Boolean legacy;
+    private Boolean legacy=false;
     @Autowired
     NATService(CommandToolService service){
         this.service = service;
@@ -33,81 +33,44 @@ public class NATService {
     }
 
     // Create
-    public Boolean execute_create_nat_postrouting(NetworkRecordCreateDTO dto) throws IOException{
+    public Boolean execute_nat_postrouting(NetworkRecordCreateDTO dto,Boolean isCreate) throws IOException{
         String outputIp = dto.getOutputIp();
         String inputIp = dto.getInputIp();
         String inputPort = dto.getInputPort();
+        String operate = this.isAppendOrDeleteRules(isCreate);
         try{
             // PostRouting
             ProcessBuilder processBuilder = new ProcessBuilder(
-                    this.isLegacyIptables(),"-t","nat","-A","POSTROUTING","-p","tcp","--dport",inputIp,"--dport",inputPort,"j","SNAT","--to-source",outputIp);
+                    this.isLegacyIptables(),"-t","nat",operate,"POSTROUTING","-p","tcp","-d",inputIp,"--dport",inputPort,"-j","SNAT","--to-source",outputIp);
             return this.service.runIptablesCommand(processBuilder);
         }catch (IOException | InterruptedException e){
             return false;
         }
     }
-    public Boolean execute_create_nat_prerouting(NetworkRecordCreateDTO dto) throws IOException{
+    public Boolean execute_nat_prerouting(NetworkRecordCreateDTO dto,Boolean isCreate) throws IOException{
         String outputPort = dto.getOutputPort();
         String inputIp = dto.getInputIp();
         String inputPort = dto.getInputPort();
+        String operate = this.isAppendOrDeleteRules(isCreate);
         try{
             // PreRouting
             String inputEndpoint = inputIp+":"+inputPort;
             ProcessBuilder processBuilder = new ProcessBuilder(
-                    this.isLegacyIptables(),"-t","nat","-A","PREROUTING","-p","tcp","--dport",outputPort,"-j","DNAT","--to-destination",inputEndpoint);
+                    this.isLegacyIptables(),"-t","nat",operate,"PREROUTING","-p","tcp","--dport",outputPort,"-j","DNAT","--to-destination",inputEndpoint);
             return this.service.runIptablesCommand(processBuilder);
         }catch (IOException | InterruptedException e){
             return false;
         }
     }
 
-    public Boolean execute_create_nat_forward(NetworkRecordCreateDTO dto) throws IOException{
+    public Boolean execute_nat_forward(NetworkRecordCreateDTO dto,Boolean isCreate) {
         String inputIp = dto.getInputIp();
         String inputPort = dto.getInputPort();
+        String operate = this.isAppendOrDeleteRules(isCreate);
         try{
             // Forward
             ProcessBuilder processBuilder = new ProcessBuilder(
-                    this.isLegacyIptables(),"-A","FORWARD","-p","tcp","-d",inputIp,"--dport",inputPort,"-j","ACCEPT");
-            return this.service.runIptablesCommand(processBuilder);
-        }catch (IOException | InterruptedException e){
-            return false;
-        }
-    }
-    // Delete
-    public Boolean execute_delete_nat_postrouting(NetworkRecordCreateDTO dto) throws IOException{
-        String outputIp = dto.getOutputIp();
-        String inputIp = dto.getInputIp();
-        String inputPort = dto.getInputPort();
-        try{
-            // PostRouting
-            ProcessBuilder processBuilder = new ProcessBuilder(
-                    this.isLegacyIptables(),"-t","nat","-D","POSTROUTING","-p","tcp","--dport",inputIp,"--dport",inputPort,"j","SNAT","--to-source",outputIp);
-            return this.service.runIptablesCommand(processBuilder);
-        }catch (IOException | InterruptedException e){
-            return false;
-        }
-    }
-    public Boolean execute_delete_nat_prerouting(NetworkRecordCreateDTO dto) throws IOException{
-        String outputPort = dto.getOutputPort();
-        String inputIp = dto.getInputIp();
-        String inputPort = dto.getInputPort();
-        try{
-            // PreRouting
-            String inputEndpoint = inputIp+":"+inputPort;
-            ProcessBuilder processBuilder = new ProcessBuilder(
-                    this.isLegacyIptables(),"-t","nat","-D","PREROUTING","-p","tcp","--dport",outputPort,"-j","DNAT","--to-destination",inputEndpoint);
-            return this.service.runIptablesCommand(processBuilder);
-        }catch (IOException | InterruptedException e){
-            return false;
-        }
-    }
-
-    public Boolean execute_delete_nat_forward(NetworkRecordCreateDTO dto) throws IOException{
-        String inputIp = dto.getInputIp();
-        String inputPort = dto.getInputPort();
-        try{
-            ProcessBuilder processBuilder = new ProcessBuilder(
-                    this.isLegacyIptables(),"-D","FORWARD","-p","tcp","-d",inputIp,"--dport",inputPort,"-j","ACCEPT");
+                    this.isLegacyIptables(),operate,"FORWARD","-p","tcp","-d",inputIp,"--dport",inputPort,"-j","ACCEPT");
             return this.service.runIptablesCommand(processBuilder);
         }catch (IOException | InterruptedException e){
             return false;
@@ -118,7 +81,7 @@ public class NATService {
         return is_append ? "-A" : "-D";
     }
     public String isLegacyIptables(){
-        String mode = this.legacy? "iptables-legacy" : "iptabales";
+        String mode = this.legacy? "iptables-legacy" : "iptables";
         System.out.println("Mode:"+ mode);
         return mode;
     }
