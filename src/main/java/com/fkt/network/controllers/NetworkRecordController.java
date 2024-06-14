@@ -8,6 +8,7 @@ import com.fkt.network.services.NetworkRecordService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,6 +18,7 @@ import java.util.List;
 
 @Tag(name = "Network Record")
 @RestController
+@ConditionalOnExpression("${network.controller.enabled:true}")
 @RequestMapping("/api")
 public class NetworkRecordController {
     private NetworkRecordService service;
@@ -55,7 +57,7 @@ public class NetworkRecordController {
     }
     @Operation(summary = "Patch By Id Network Record")
     @PatchMapping("/nat/record/{id}")
-    public ResponseEntity<NetworkRecord> patchById(@PathVariable("id") String id ,@RequestBody NetworkRecordRequestDTO dto){
+    public ResponseEntity<NetworkRecord> patchById(@PathVariable("id") String id ,@RequestBody NetworkRecordRequestDTO dto) throws IOException {
         return this.service.patch_network_record_by_id(id,dto);
     }
     @Operation(summary = "Create NAT Iptables Service")

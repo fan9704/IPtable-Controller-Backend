@@ -1,5 +1,6 @@
 package com.fkt.network.dtos;
 
+import com.fkt.network.models.NetworkRecord;
 import lombok.*;
 
 @Getter
@@ -15,4 +16,25 @@ public class NetworkRecordCreateDTO {
 
     private String protocol;
     private String note;
+
+    public  String getFullNetworkRecord(){
+        return String.format("%s:%s:%s:%s",
+                this.getOutputPort(),
+                this.getOutputIp(),
+                this.getInputPort(),
+                this.getInputIp()
+        );
+    }
+    public NetworkRecord dtoToNetworkRecord(){
+        NetworkRecord networkRecord = new NetworkRecord();
+
+        networkRecord.setInputIp(this.getInputIp());
+        networkRecord.setInputPort(this.getInputPort());
+        networkRecord.setOutputIp(this.getOutputIp());
+        networkRecord.setOutputPort(this.getOutputPort());
+        networkRecord.setNote(this.getNote());
+        networkRecord.setProtocol(this.getProtocol());
+        networkRecord.setFullNetworkRecord(this.getFullNetworkRecord());
+        return networkRecord;
+    }
 }
