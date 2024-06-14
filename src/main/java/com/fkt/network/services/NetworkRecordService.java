@@ -31,6 +31,7 @@ public class NetworkRecordService {
     public ResponseEntity<List<NetworkRecord>> findAllNetworkRecord(){
         return new ResponseEntity<>(this.repository.findAll(), HttpStatus.OK);
     }
+
     public ResponseEntity<NetworkRecord> create_service(NetworkRecordCreateDTO dto) {
         NetworkRecord networkRecord=this.create_nat_service(dto);
         if(networkRecord == null){
@@ -41,17 +42,25 @@ public class NetworkRecordService {
     }
     public NetworkRecord create_nat_service(NetworkRecordCreateDTO dto) {
         // Check Rule is repeat
-        String fullNetworkRecord = this.getFullNetworkRecord(dto);
+        String fullNetworkRecord = dto.getFullNetworkRecord();
+        Boolean createNATStatus;
         boolean repeated = this.check_repeat_record(fullNetworkRecord);
         if(repeated){
             System.out.println("Network Record Repeat");
             return null;
         }
-        // Create NAT Service in Host
-        Boolean createNATStatus= this.execute_nat_command(dto);
+
+        if(Objects.equals(dto.getProtocol(), "SSH")){
+            // Type SSH
+            createNATStatus = this.execute_ssh_nat_command(dto);
+        }else{
+            // Type TCP NAT
+            createNATStatus = this.execute_nat_command(dto);
+        }
+        // Create NAT Record in Host
         if(createNATStatus){
             // Save Record to database
-            NetworkRecord networkRecord = getNetworkRecord(dto, fullNetworkRecord);
+            NetworkRecord networkRecord = dto.dtoToNetworkRecord();
             return this.repository.save(networkRecord);
         }else{
             System.out.println("Create NAT Rules to iptables failed");
@@ -64,13 +73,33 @@ public class NetworkRecordService {
         return optionalNetworkRecord.map(networkRecord -> new ResponseEntity<>(networkRecord, HttpStatus.OK)).orElseGet(() -> new ResponseEntity<>(null, HttpStatus.NOT_FOUND));
     }
 
-    public ResponseEntity<NetworkRecord> patch_network_record_by_id(String id, NetworkRecordRequestDTO dto){
+    public ResponseEntity<NetworkRecord> patch_network_record_by_id(String id, NetworkRecordRequestDTO dto) throws IOException {
         Optional<NetworkRecord> optionalNetworkRecord =this.repository.findById(id);
+        Boolean deleteSuccess;
+        Boolean createSuccess;
+        // Patch Network Record
         if(optionalNetworkRecord.isPresent()){
-            // Patch Network Record
-            NetworkRecord networkRecord=this.editNetworkRecord(optionalNetworkRecord.get(),dto);
-            // TODO: Update Iptables
-            return new ResponseEntity<>(this.repository.save(networkRecord),HttpStatus.OK);
+            // Old Record and DTO
+            NetworkRecord oldNetworkRecord = optionalNetworkRecord.get();
+            NetworkRecordCreateDTO oldNetworkRecordDTO=oldNetworkRecord.networkRecordToDTO();
+            // New Record and DTO
+            NetworkRecord newNetworkRecord=this.editNetworkRecord(oldNetworkRecord,dto);
+            NetworkRecordCreateDTO newNetworkRecordDTO=newNetworkRecord.networkRecordToDTO();
+            // Remove Old Record
+            if(oldNetworkRecord.getProtocol().equals("SSH")){
+                deleteSuccess=this.natService.execute_ssh_nat_forward(oldNetworkRecordDTO,false);
+            }else{
+                deleteSuccess=this.natService.execute_nat_prerouting(newNetworkRecordDTO,false) && this.natService.execute_nat_postrouting(oldNetworkRecordDTO,false);
+            }
+            System.out.println("Delete Old Record Status:"+deleteSuccess);
+            // Create New Record
+            if(newNetworkRecord.getProtocol().equals("SSH")){
+                createSuccess=this.natService.execute_ssh_nat_forward(oldNetworkRecordDTO,true);
+            }else{
+                createSuccess=this.natService.execute_nat_prerouting(newNetworkRecordDTO,true) && this.natService.execute_nat_postrouting(newNetworkRecordDTO,true);
+            }
+            System.out.println("Create New Record Status:"+createSuccess);
+            return new ResponseEntity<>(this.repository.save(newNetworkRecord),HttpStatus.OK);
         }else{
             return new ResponseEntity<>(null,HttpStatus.NOT_FOUND);
         }
@@ -96,22 +125,30 @@ public class NetworkRecordService {
             networkRecord.setProtocol(dto.getProtocol());
         }
 
-        networkRecord.setFullNetworkRecord(this.getFullNetworkRecord(networkRecord));
+        networkRecord.setFullNetworkRecord(networkRecord.getFullNetworkRecord());
         return networkRecord;
     }
 
 
 
     public ResponseEntity<?> delete_nat_service(String id) throws IOException {
+        Boolean delete_prerouting_success;
+        Boolean delete_postrouting_success;
         Optional<NetworkRecord>networkRecordOptional = this.repository.findById(id);
         if(networkRecordOptional.isPresent()){
             NetworkRecord networkRecord = networkRecordOptional.get();
-            NetworkRecordCreateDTO dto = this.networkRecordToDTO(networkRecord);
-            // Delete Rules
-            Boolean delete_prerouting_success=this.natService.execute_nat_prerouting(dto,false);
-            Boolean delete_postrouting_success=this.natService.execute_nat_postrouting(dto,false);
-            System.out.println("Delete PREROUTEING:"+delete_prerouting_success);
-            System.out.println("Delete POSTROUTEING:"+delete_postrouting_success);
+            NetworkRecordCreateDTO dto = networkRecord.networkRecordToDTO();
+            if(Objects.equals(dto.getProtocol(), "SSH")){
+                // Type SSH
+                delete_prerouting_success= this.natService.execute_ssh_nat_forward(dto,false);
+                System.out.println("Delete SSH PREROUTEING:"+delete_prerouting_success);
+            }else{
+                // Type TCP
+                delete_prerouting_success=this.natService.execute_nat_prerouting(dto,false);
+                delete_postrouting_success=this.natService.execute_nat_postrouting(dto,false);
+                System.out.println("Delete TCP PREROUTEING:"+delete_prerouting_success);
+                System.out.println("Delete TCP POSTROUTEING:"+delete_postrouting_success);
+            }
             this.repository.deleteById(id);
             return new ResponseEntity<>(null,HttpStatus.OK);
 
@@ -129,6 +166,12 @@ public class NetworkRecordService {
         }else{
             return new ResponseEntity<>(responseDTO,HttpStatus.INTERNAL_SERVER_ERROR);
         }
+    }
+    public Boolean execute_ssh_nat_command(NetworkRecordCreateDTO dto) {
+        // PreRouting
+        Boolean createPreRoutingSuccess=this.natService.execute_ssh_nat_forward(dto,true);
+        System.out.println("Create PREROUTEING:"+createPreRoutingSuccess);
+        return createPreRoutingSuccess ;
     }
     public Boolean execute_nat_command(NetworkRecordCreateDTO dto) {
         try{
@@ -188,44 +231,5 @@ public class NetworkRecordService {
         responseDTO.setResponse(response.toString());
         responseDTO.setStatus(status);
         return new ResponseEntity<>(responseDTO, httpStatus);
-    }
-    // Utils
-    private NetworkRecord getNetworkRecord(NetworkRecordCreateDTO dto, String fullNetworkRecord) {
-        NetworkRecord networkRecord = new NetworkRecord();
-
-        networkRecord.setInputIp(dto.getInputIp());
-        networkRecord.setInputPort(dto.getInputPort());
-        networkRecord.setOutputIp(dto.getOutputIp());
-        networkRecord.setOutputPort(dto.getOutputPort());
-        networkRecord.setNote(dto.getNote());
-        networkRecord.setProtocol(dto.getProtocol());
-        networkRecord.setFullNetworkRecord(fullNetworkRecord);
-        return networkRecord;
-    }
-    private NetworkRecordCreateDTO networkRecordToDTO(NetworkRecord networkRecord){
-        NetworkRecordCreateDTO dto = new NetworkRecordCreateDTO();
-        dto.setInputIp(networkRecord.getInputIp());
-        dto.setInputPort(networkRecord.getInputPort());
-        dto.setOutputIp(networkRecord.getOutputIp());
-        dto.setOutputPort(networkRecord.getOutputPort());
-        dto.setNote(networkRecord.getNote());
-        dto.setProtocol(networkRecord.getProtocol());
-        return dto;
-    }
-    private String getFullNetworkRecord(NetworkRecord networkRecord){
-        return String.format("%s:%s:%s:%s",
-                networkRecord.getOutputPort(),
-                networkRecord.getOutputIp(),
-                networkRecord.getInputPort(),
-                networkRecord.getInputIp()
-        );
-    }
-    private String getFullNetworkRecord(NetworkRecordCreateDTO dto){
-        return String.format("%s:%s:%s:%s",
-                dto.getOutputPort(),
-                dto.getOutputIp(),
-                dto.getInputPort(),
-                dto.getInputIp()
-        );
     }
 }

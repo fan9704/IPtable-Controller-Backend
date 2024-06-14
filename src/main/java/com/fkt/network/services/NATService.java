@@ -77,6 +77,22 @@ public class NATService {
         }
     }
 
+    public Boolean execute_ssh_nat_forward(NetworkRecordCreateDTO dto,Boolean isCreate){
+        String inputIp = dto.getInputIp();
+        String inputPort = dto.getInputPort();
+        String inputEndpoint = inputIp+":"+inputPort;
+        String outputPort = dto.getOutputPort();
+        String operate = this.isAppendOrDeleteRules(isCreate);
+        try{
+            // Forward
+            ProcessBuilder processBuilder = new ProcessBuilder(
+                    this.isLegacyIptables(),"-t","nat",operate,"PREROUTING","-p","tcp","--dport",outputPort,"-j","DNAT","--to",inputEndpoint);
+            return this.service.runIptablesCommand(processBuilder);
+        }catch (IOException | InterruptedException e){
+            return false;
+        }
+    }
+
     public String isAppendOrDeleteRules(Boolean is_append){
         return is_append ? "-A" : "-D";
     }
