@@ -6,7 +6,10 @@ import com.fkt.network.dtos.request.NetworkRecordRequestDTO;
 import com.fkt.network.dtos.response.ExecuteCommandResponseDTO;
 import com.fkt.network.models.NetworkRecord;
 import com.fkt.network.repositories.NetworkRecordRepository;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -22,10 +25,13 @@ import java.util.Optional;
 public class NetworkRecordService {
     private NetworkRecordRepository repository;
     private NATService natService;
+    private final RabbitTemplate rabbitTemplate;
     @Autowired
-    public NetworkRecordService(NetworkRecordRepository repository,NATService natService){
+    public NetworkRecordService(NetworkRecordRepository repository, NATService natService, RabbitTemplate rabbitTemplate){
         this.repository = repository;
         this.natService = natService;
+        this.rabbitTemplate = rabbitTemplate;
+        rabbitTemplate.setMessageConverter( new Jackson2JsonMessageConverter());
     }
 
     public ResponseEntity<List<NetworkRecord>> findAllNetworkRecord(){
@@ -37,6 +43,8 @@ public class NetworkRecordService {
         if(networkRecord == null){
             return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
         }else{
+            //TODO: Handler Disable AMQP
+            rabbitTemplate.convertAndSend("client","140.96.83.14",networkRecord.toAMQPDTO("create"));
             return new ResponseEntity<>(networkRecord, HttpStatus.CREATED);
         }
     }
@@ -99,6 +107,7 @@ public class NetworkRecordService {
                 createSuccess=this.natService.execute_nat_prerouting(newNetworkRecordDTO,true) && this.natService.execute_nat_postrouting(newNetworkRecordDTO,true);
             }
             System.out.println("Create New Record Status:"+createSuccess);
+            //TODO:Send AMQP DTO
             return new ResponseEntity<>(this.repository.save(newNetworkRecord),HttpStatus.OK);
         }else{
             return new ResponseEntity<>(null,HttpStatus.NOT_FOUND);
@@ -150,6 +159,7 @@ public class NetworkRecordService {
                 System.out.println("Delete TCP POSTROUTEING:"+delete_postrouting_success);
             }
             this.repository.deleteById(id);
+            //TODO:Send Delete AMQP DTO
             return new ResponseEntity<>(null,HttpStatus.OK);
 
         }else{
