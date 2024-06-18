@@ -2,6 +2,7 @@ package com.fkt.network.models;
 
 
 import com.fkt.network.dtos.NetworkRecordCreateDTO;
+import com.fkt.network.dtos.request.NetworkRecordAMQPRequestDTO;
 import  lombok.*;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
@@ -52,13 +53,27 @@ public class NetworkRecord {
         );
     }
     public NetworkRecordCreateDTO networkRecordToDTO(){
-        NetworkRecordCreateDTO dto = new NetworkRecordCreateDTO();
-        dto.setInputIp(this.getInputIp());
-        dto.setInputPort(this.getInputPort());
-        dto.setOutputIp(this.getOutputIp());
-        dto.setOutputPort(this.getOutputPort());
-        dto.setNote(this.getNote());
-        dto.setProtocol(this.getProtocol());
+        NetworkRecordCreateDTO dto = new NetworkRecordCreateDTO(
+                getOutputIp(),
+                getOutputPort(),
+                getInputIp(),
+                getInputPort(),
+                getProtocol(),
+                getNote()
+        );
+        return dto;
+    }
+    public NetworkRecordAMQPRequestDTO toAMQPDTO(String operation){
+        NetworkRecordAMQPRequestDTO dto = new NetworkRecordAMQPRequestDTO(
+                getOutputIp(),
+                getOutputPort(),
+                getInputIp(),
+                getInputPort(),
+                getProtocol(),
+                getNote(),
+                getFullNetworkRecord(),
+                operation
+        );
         return dto;
     }
 }
