@@ -26,7 +26,7 @@ public class NetworkRecordService {
     private NetworkRecordRepository repository;
     private NATService natService;
     private final RabbitTemplate rabbitTemplate;
-    @Value("{spring.rabbitmq.enable}")
+    @Value("${spring.rabbitmq.enable}")
     private Boolean amqpIsEnable = false;
     @Autowired
     public NetworkRecordService(NetworkRecordRepository repository, NATService natService, RabbitTemplate rabbitTemplate){
@@ -256,10 +256,6 @@ public class NetworkRecordService {
     }
 
     public Boolean amqpIsEnabled(){
-        if(this.amqpIsEnable == null){
-            return false;
-        }else{
-            return this.amqpIsEnable;
-        }
+        return this.amqpIsEnable == true;
     }
 }
