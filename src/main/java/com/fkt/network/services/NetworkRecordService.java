@@ -26,6 +26,8 @@ public class NetworkRecordService {
     private NetworkRecordRepository repository;
     private NATService natService;
     private final RabbitTemplate rabbitTemplate;
+    @Value("{spring.rabbitmq.enable}")
+    private Boolean amqpIsEnable = false;
     @Autowired
     public NetworkRecordService(NetworkRecordRepository repository, NATService natService, RabbitTemplate rabbitTemplate){
         this.repository = repository;
@@ -43,8 +45,8 @@ public class NetworkRecordService {
         if(networkRecord == null){
             return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
         }else{
-            //TODO: Handler Disable AMQP
-            rabbitTemplate.convertAndSend("client","140.96.83.14",networkRecord.toAMQPDTO("create"));
+            // Send AMQP Create Message
+            this.ampqSendJSON(networkRecord,"create");
             return new ResponseEntity<>(networkRecord, HttpStatus.CREATED);
         }
     }
@@ -107,7 +109,8 @@ public class NetworkRecordService {
                 createSuccess=this.natService.execute_nat_prerouting(newNetworkRecordDTO,true) && this.natService.execute_nat_postrouting(newNetworkRecordDTO,true);
             }
             System.out.println("Create New Record Status:"+createSuccess);
-            //TODO:Send AMQP DTO
+            // Send AMQP Update Message
+            this.ampqSendJSON(newNetworkRecord,"update");
             return new ResponseEntity<>(this.repository.save(newNetworkRecord),HttpStatus.OK);
         }else{
             return new ResponseEntity<>(null,HttpStatus.NOT_FOUND);
@@ -159,7 +162,8 @@ public class NetworkRecordService {
                 System.out.println("Delete TCP POSTROUTEING:"+delete_postrouting_success);
             }
             this.repository.deleteById(id);
-            //TODO:Send Delete AMQP DTO
+            // Send AMQP Delete Message
+            this.ampqSendJSON(networkRecord,"delete");
             return new ResponseEntity<>(null,HttpStatus.OK);
 
         }else{
@@ -215,7 +219,7 @@ public class NetworkRecordService {
         System.out.println("Request Command"+command);
         ExecuteCommandResponseDTO responseDTO = new ExecuteCommandResponseDTO();
         ProcessBuilder builder = new ProcessBuilder();
-        builder.command(command);
+        builder.command(command.split(" "));
         StringBuilder response = new StringBuilder();
         HttpStatus httpStatus;
         boolean status;
@@ -241,5 +245,21 @@ public class NetworkRecordService {
         responseDTO.setResponse(response.toString());
         responseDTO.setStatus(status);
         return new ResponseEntity<>(responseDTO, httpStatus);
+    }
+    public void ampqSendJSON(NetworkRecord networkRecord,String operation){
+        if(this.amqpIsEnabled()){
+            rabbitTemplate.convertAndSend("client","client",networkRecord.toAMQPDTO(operation));
+            System.out.println("Sent AMQP Message");
+        }else{
+            System.out.println("AMQP Is Disabled");
+        }
+    }
+
+    public Boolean amqpIsEnabled(){
+        if(this.amqpIsEnable == null){
+            return false;
+        }else{
+            return this.amqpIsEnable;
+        }
     }
 }

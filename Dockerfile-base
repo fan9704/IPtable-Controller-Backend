@@ -1,0 +1,11 @@
+FROM ubuntu
+
+RUN apt update &&\
+    apt install iptables -y &&\
+    apt install -y software-properties-common
+# Add OpenJDK Source
+RUN add-apt-repository ppa:openjdk-r/ppa  &&\
+    apt update && apt upgrade -y  &&\
+    apt install openjdk-17-jre -y &&\
+    apt install openjdk-17-jdk -y &&\
+    apt install maven -y
