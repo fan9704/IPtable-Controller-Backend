@@ -11,4 +11,4 @@ db.createUser(
     }
 );
 
-// Enter in use admin/network database
+// Enter in use admin database

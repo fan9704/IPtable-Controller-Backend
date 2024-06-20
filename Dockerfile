@@ -1,5 +1,5 @@
 # Base Image
-FROM fan9704/iptables-openjdk:17-slim
+FROM fan9704/iptables-openjdk
 
 LABEL maintainer="fan9704"
 
@@ -13,7 +13,7 @@ ENV MONGO_DB_USERNAME=test
 ENV MONGO_DB_PASSWORD=123456
 ENV MONGO_DB_DATABASE=network
 ENV MONGO_DB_PORT=27017
-ENV IPTALBES_LEGACY=true
+ENV IPTALBES_LEGACY=false
 # Must Given
 ENV PVE_HOST=127.0.0.1
 ENV PVE_USERNAME=root

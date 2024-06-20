@@ -3,19 +3,19 @@ package com.fkt.network.services;
 import com.fkt.network.dtos.request.BeatAMQPRequestDTO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 @Service
+@ConditionalOnExpression("${spring.rabbitmq.enable}")
 public class BeatService {
     private RabbitTemplate rabbitTemplate;
-    @Value("${rabbitmq.exchange.name:client}")
-    private String exchange;
+    private String exchange="beat";
 
-    @Value("${rabbitmq.routing.key:127.0.0.1}")
-    private String routingKey;
+    private String routingKey="beat";
     @Value("{host.ip}")
     private String hostIp;
     @Autowired
