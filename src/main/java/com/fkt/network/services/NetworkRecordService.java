@@ -2,7 +2,6 @@ package com.fkt.network.services;
 
 import com.fkt.network.dtos.ExecuteCommandRequestDTO;
 import com.fkt.network.dtos.NetworkRecordCreateDTO;
-import com.fkt.network.dtos.request.NetworkRecordRequestDTO;
 import com.fkt.network.dtos.response.ExecuteCommandResponseDTO;
 import com.fkt.network.models.NetworkRecord;
 import com.fkt.network.repositories.NetworkRecordRepository;
@@ -14,9 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -25,13 +22,15 @@ import java.util.Optional;
 public class NetworkRecordService {
     private NetworkRecordRepository repository;
     private NATService natService;
+    private CommandToolService commandToolService;
     private final RabbitTemplate rabbitTemplate;
     @Value("${spring.rabbitmq.enable}")
     private Boolean amqpIsEnable = false;
     @Autowired
-    public NetworkRecordService(NetworkRecordRepository repository, NATService natService, RabbitTemplate rabbitTemplate){
+    public NetworkRecordService(NetworkRecordRepository repository, NATService natService,CommandToolService commandToolService, RabbitTemplate rabbitTemplate){
         this.repository = repository;
         this.natService = natService;
+        this.commandToolService = commandToolService;
         this.rabbitTemplate = rabbitTemplate;
         rabbitTemplate.setMessageConverter( new Jackson2JsonMessageConverter());
     }
@@ -40,17 +39,17 @@ public class NetworkRecordService {
         return new ResponseEntity<>(this.repository.findAll(), HttpStatus.OK);
     }
 
-    public ResponseEntity<NetworkRecord> create_service(NetworkRecordCreateDTO dto) {
-        NetworkRecord networkRecord=this.create_nat_service(dto);
+    public ResponseEntity<NetworkRecord> createWithResponseEntity(NetworkRecordCreateDTO dto) {
+        NetworkRecord networkRecord=this.createNatService(dto);
         if(networkRecord == null){
             return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
         }else{
             // Send AMQP Create Message
-            this.ampqSendJSON(networkRecord,"create");
+            this.amqpSendJSON(networkRecord,"create");
             return new ResponseEntity<>(networkRecord, HttpStatus.CREATED);
         }
     }
-    public NetworkRecord create_nat_service(NetworkRecordCreateDTO dto) {
+    public NetworkRecord createNatService(NetworkRecordCreateDTO dto) {
         // Check Rule is repeat
         String fullNetworkRecord = dto.getFullNetworkRecord();
         Boolean createNATStatus;
@@ -69,21 +68,29 @@ public class NetworkRecordService {
         }
         // Create NAT Record in Host
         if(createNATStatus){
-            // Save Record to database
-            NetworkRecord networkRecord = dto.dtoToNetworkRecord();
-            return this.repository.save(networkRecord);
+            return this.repository.save(dto.dtoToNetworkRecord());
         }else{
             System.out.println("Create NAT Rules to iptables failed");
             return null;
         }
     }
 
-    public ResponseEntity<NetworkRecord> find_network_record_by_id(String id){
+    public ResponseEntity<NetworkRecord> findNetworkRecordById(String id){
         Optional<NetworkRecord> optionalNetworkRecord =this.repository.findById(id);
         return optionalNetworkRecord.map(networkRecord -> new ResponseEntity<>(networkRecord, HttpStatus.OK)).orElseGet(() -> new ResponseEntity<>(null, HttpStatus.NOT_FOUND));
     }
+    public ResponseEntity<NetworkRecord> patchNetworkRecordByIdWithResponseEntity(String id,NetworkRecordCreateDTO dto) throws IOException {
+        NetworkRecord networkRecord = this.patchNetworkRecordById(id,dto);
+        if(networkRecord != null){
+            // Send AMQP Update Message
+            this.amqpSendJSON(networkRecord,"update");
+            return new ResponseEntity<>(networkRecord,HttpStatus.OK);
+        }else{
+            return new ResponseEntity<>(null,HttpStatus.NOT_FOUND);
+        }
+    }
 
-    public ResponseEntity<NetworkRecord> patch_network_record_by_id(String id, NetworkRecordRequestDTO dto) throws IOException {
+    public NetworkRecord patchNetworkRecordById(String id, NetworkRecordCreateDTO dto) throws IOException {
         Optional<NetworkRecord> optionalNetworkRecord =this.repository.findById(id);
         Boolean deleteSuccess;
         Boolean createSuccess;
@@ -109,15 +116,14 @@ public class NetworkRecordService {
                 createSuccess=this.natService.execute_nat_prerouting(newNetworkRecordDTO,true) && this.natService.execute_nat_postrouting(newNetworkRecordDTO,true);
             }
             System.out.println("Create New Record Status:"+createSuccess);
-            // Send AMQP Update Message
-            this.ampqSendJSON(newNetworkRecord,"update");
-            return new ResponseEntity<>(this.repository.save(newNetworkRecord),HttpStatus.OK);
+
+            return this.repository.save(newNetworkRecord);
         }else{
-            return new ResponseEntity<>(null,HttpStatus.NOT_FOUND);
+            return null;
         }
     }
 
-    private NetworkRecord editNetworkRecord(NetworkRecord networkRecord,NetworkRecordRequestDTO dto) {
+    private NetworkRecord editNetworkRecord(NetworkRecord networkRecord,NetworkRecordCreateDTO dto) {
         if(!Objects.equals(dto.getInputIp(), "")){
             networkRecord.setInputIp(dto.getInputIp());
         }
@@ -141,9 +147,20 @@ public class NetworkRecordService {
         return networkRecord;
     }
 
+    public ResponseEntity<?> deleteNetworkRecordByIdWithResponseEntity(String id) throws IOException{
+        NetworkRecord networkRecord = this.deleteNatService(id);
+        if(networkRecord != null){
+            // Send AMQP Delete Message
+            this.amqpSendJSON(networkRecord,"delete");
+            return new ResponseEntity<>(null,HttpStatus.OK);
+        }else{
+            return new ResponseEntity<>(null,HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
 
 
-    public ResponseEntity<?> delete_nat_service(String id) throws IOException {
+
+    public NetworkRecord deleteNatService(String id) throws IOException {
         Boolean delete_prerouting_success;
         Boolean delete_postrouting_success;
         Optional<NetworkRecord>networkRecordOptional = this.repository.findById(id);
@@ -162,13 +179,27 @@ public class NetworkRecordService {
                 System.out.println("Delete TCP POSTROUTEING:"+delete_postrouting_success);
             }
             this.repository.deleteById(id);
-            // Send AMQP Delete Message
-            this.ampqSendJSON(networkRecord,"delete");
-            return new ResponseEntity<>(null,HttpStatus.OK);
-
+            return networkRecord;
         }else{
-            return new ResponseEntity<>(null,HttpStatus.INTERNAL_SERVER_ERROR);
+            return null;
         }
+    }
+    public ResponseEntity<NetworkRecord> refreshNetworkRecordById(String id){
+        Optional<NetworkRecord> optionalNetworkRecord =this.repository.findById(id);
+        if(optionalNetworkRecord.isPresent()){
+            this.amqpSendJSON(optionalNetworkRecord.get(),"create");
+            return new ResponseEntity<>(optionalNetworkRecord.get(),HttpStatus.OK);
+        }else{
+            return new ResponseEntity<>(null,HttpStatus.NOT_FOUND);
+        }
+
+    }
+    public ResponseEntity<List<NetworkRecord>> refreshAllNetworkRecord(){
+        List<NetworkRecord> networkRecordList=this.repository.findAll();
+        for(NetworkRecord networkRecord:networkRecordList){
+            this.amqpSendJSON(networkRecord,"create");
+        }
+        return new ResponseEntity<>(networkRecordList,HttpStatus.OK);
     }
 
 
@@ -200,53 +231,32 @@ public class NetworkRecordService {
             return false;
         }
     }
+    public NetworkRecord findNetworkRecordByFullNetworkRecord(String fullNetworkRecord){
+        return this.repository.findByFullNetworkRecordIs(fullNetworkRecord).get(0);
+    }
+    public void deleteNetworkRecordByFullNetworkRecord(String fullNetworkRecord){
+        this.repository.deleteByFullNetworkRecord(fullNetworkRecord);
+    }
     public boolean check_repeat_record(String fullNetworkRecord){
         List<NetworkRecord> networkRecordList=this.repository.findByFullNetworkRecordIs(fullNetworkRecord);
         return !networkRecordList.isEmpty();
     }
 
-    public ResponseEntity<ExecuteCommandResponseDTO> execute_command(ExecuteCommandRequestDTO dto){
-        String system=System.getProperty("os.name");
-        boolean isWindows = system.contains("Windows");
-        String command;
-        if(isWindows){
-            System.out.println("Windows System");
-            command = "cmd.exe /c "+dto.getCommand() ;
-        }else{
-            System.out.println("Linux System");
-            command = dto.getCommand() ;
-        }
-        System.out.println("Request Command"+command);
-        ExecuteCommandResponseDTO responseDTO = new ExecuteCommandResponseDTO();
-        ProcessBuilder builder = new ProcessBuilder();
-        builder.command(command.split(" "));
-        StringBuilder response = new StringBuilder();
-        HttpStatus httpStatus;
-        boolean status;
-        try{
-            Process process = builder.start();
-            process.waitFor();
-            status = true;
-            httpStatus = HttpStatus.OK;
+    public ResponseEntity<ExecuteCommandResponseDTO> executeCommand(ExecuteCommandRequestDTO dto){
 
-            BufferedReader buffer = new BufferedReader(new InputStreamReader(process.getInputStream()));
-            String str;
-            while((str=(buffer.readLine()))!=null){
-                response.append(str);
-            }
-
-        } catch (IOException | InterruptedException e) {
-            e.printStackTrace();
-            System.out.println(e);
-            response = new StringBuilder("Not success");
-            status = false;
-            httpStatus = HttpStatus.INTERNAL_SERVER_ERROR;
+        try {
+            ProcessBuilder processBuilder = new ProcessBuilder(dto.getCommand().split(" "));
+            ExecuteCommandResponseDTO responseDTO = this.commandToolService.runIptablesCommandWithResponseDTO(processBuilder);
+            return new ResponseEntity<>(responseDTO,HttpStatus.OK);
+        } catch (Exception e) {
+            ExecuteCommandResponseDTO responseDTO = new ExecuteCommandResponseDTO();
+            responseDTO.setStatus(false);
+            responseDTO.setResponse(e.getMessage());
+            responseDTO.setMessage("Unexpected Error Occurred");
+            return new ResponseEntity<>(responseDTO,HttpStatus.INTERNAL_SERVER_ERROR);
         }
-        responseDTO.setResponse(response.toString());
-        responseDTO.setStatus(status);
-        return new ResponseEntity<>(responseDTO, httpStatus);
     }
-    public void ampqSendJSON(NetworkRecord networkRecord,String operation){
+    public void amqpSendJSON(NetworkRecord networkRecord,String operation){
         if(this.amqpIsEnabled()){
             rabbitTemplate.convertAndSend("client","client",networkRecord.toAMQPDTO(operation));
             System.out.println("Sent AMQP Message");

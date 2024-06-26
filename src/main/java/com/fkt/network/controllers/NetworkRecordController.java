@@ -2,7 +2,7 @@ package com.fkt.network.controllers;
 
 import com.fkt.network.dtos.ExecuteCommandRequestDTO;
 import com.fkt.network.dtos.NetworkRecordCreateDTO;
-import com.fkt.network.dtos.request.NetworkRecordRequestDTO;
+import com.fkt.network.dtos.response.ExecuteCommandResponseDTO;
 import com.fkt.network.models.NetworkRecord;
 import com.fkt.network.services.NetworkRecordService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -35,8 +35,8 @@ public class NetworkRecordController {
 
     @Operation(summary = "Execute Command")
     @PostMapping("/command")
-    public ResponseEntity<?> execute_command(@RequestBody ExecuteCommandRequestDTO dto){
-        return this.service.execute_command(dto);
+    public ResponseEntity<ExecuteCommandResponseDTO> execute_command(@RequestBody ExecuteCommandRequestDTO dto){
+        return this.service.executeCommand(dto);
     }
     @Operation(summary = "List NAT rules from os")
     @GetMapping("/nat/iptables")
@@ -53,21 +53,31 @@ public class NetworkRecordController {
     @Operation(summary = "Find By Id Network Record")
     @GetMapping("/nat/record/{id}")
     public ResponseEntity<NetworkRecord> findById(@PathVariable("id") String id){
-        return this.service.find_network_record_by_id(id);
+        return this.service.findNetworkRecordById(id);
+    }
+    @Operation(summary = "Refresh All Network Record")
+    @GetMapping("/nat/refresh/record")
+    public ResponseEntity<List<NetworkRecord>> refreshAll() {
+        return this.service.refreshAllNetworkRecord();
+    }
+    @Operation(summary = "Refresh By Id Network Record")
+    @GetMapping("/nat/refresh/record/{id}")
+    public ResponseEntity<NetworkRecord> refreshById(@PathVariable("id") String id) {
+        return this.service.refreshNetworkRecordById(id);
     }
     @Operation(summary = "Patch By Id Network Record")
     @PatchMapping("/nat/record/{id}")
-    public ResponseEntity<NetworkRecord> patchById(@PathVariable("id") String id ,@RequestBody NetworkRecordRequestDTO dto) throws IOException {
-        return this.service.patch_network_record_by_id(id,dto);
+    public ResponseEntity<NetworkRecord> patchById(@PathVariable("id") String id ,@RequestBody NetworkRecordCreateDTO dto) throws IOException {
+        return this.service.patchNetworkRecordByIdWithResponseEntity(id,dto);
     }
     @Operation(summary = "Create NAT Iptables Service")
     @PostMapping("/nat/record")
-    public ResponseEntity<?> create_nat(@RequestBody NetworkRecordCreateDTO dto) {
-        return this.service.create_service(dto);
+    public ResponseEntity<NetworkRecord> createNat(@RequestBody NetworkRecordCreateDTO dto) {
+        return this.service.createWithResponseEntity(dto);
     }
     @Operation(summary = "Delete NAT Iptables Service")
     @DeleteMapping("/nat/record/{id}")
-    public ResponseEntity<?> delete_nat(@PathVariable("id") String id) throws IOException {
-        return this.service.delete_nat_service(id);
+    public ResponseEntity<?> deleteNat(@PathVariable("id") String id) throws IOException {
+        return this.service.deleteNetworkRecordByIdWithResponseEntity(id);
     }
 }

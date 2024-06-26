@@ -31,7 +31,6 @@ public class NATService {
             return responseDTO;
         }
     }
-
     // Create
     public Boolean execute_nat_postrouting(NetworkRecordCreateDTO dto,Boolean isCreate) throws IOException{
         String outputIp = dto.getOutputIp();
