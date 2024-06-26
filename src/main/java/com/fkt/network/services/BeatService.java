@@ -16,7 +16,7 @@ public class BeatService {
     private String exchange="beat";
 
     private String routingKey="beat";
-    @Value("{host.ip}")
+    @Value("${host.ip}")
     private String hostIp;
     @Autowired
     public BeatService(RabbitTemplate rabbitTemplate){
