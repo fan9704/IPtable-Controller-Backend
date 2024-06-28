@@ -1,4 +1,4 @@
-package com.fkt.network.dtos;
+package com.fkt.network.dtos.request;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

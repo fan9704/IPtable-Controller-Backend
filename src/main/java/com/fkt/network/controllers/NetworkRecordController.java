@@ -1,7 +1,7 @@
 package com.fkt.network.controllers;
 
-import com.fkt.network.dtos.ExecuteCommandRequestDTO;
-import com.fkt.network.dtos.NetworkRecordCreateDTO;
+import com.fkt.network.dtos.request.ExecuteCommandRequestDTO;
+import com.fkt.network.dtos.request.NetworkRecordCreateDTO;
 import com.fkt.network.dtos.response.ExecuteCommandResponseDTO;
 import com.fkt.network.models.NetworkRecord;
 import com.fkt.network.services.NetworkRecordService;

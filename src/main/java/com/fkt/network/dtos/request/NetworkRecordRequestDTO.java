@@ -1,5 +1,4 @@
 package com.fkt.network.dtos.request;
-import com.fkt.network.dtos.NetworkRecordCreateDTO;
 import com.fkt.network.models.NetworkRecord;
 import lombok.*;
 
