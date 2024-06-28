@@ -1,4 +1,4 @@
-package com.fkt.network.dtos;
+package com.fkt.network.dtos.request;
 
 import com.fkt.network.models.NetworkRecord;
 import lombok.*;
@@ -7,7 +7,7 @@ import lombok.*;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-public class NetworkRecordCreateDTO {
+public class   NetworkRecordCreateDTO {
     private String outputIp;
     private String outputPort;
 
