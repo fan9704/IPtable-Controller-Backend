@@ -1,7 +1,7 @@
 package com.fkt.network.models;
 
 
-import com.fkt.network.dtos.NetworkRecordCreateDTO;
+import com.fkt.network.dtos.request.NetworkRecordCreateDTO;
 import com.fkt.network.dtos.request.NetworkRecordAMQPRequestDTO;
 import  lombok.*;
 import org.springframework.data.annotation.Id;

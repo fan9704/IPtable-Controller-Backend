@@ -1,6 +1,6 @@
 package com.fkt.network.services;
 
-import com.fkt.network.dtos.NetworkRecordCreateDTO;
+import com.fkt.network.dtos.request.NetworkRecordCreateDTO;
 import com.fkt.network.dtos.response.ExecuteCommandResponseDTO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
