@@ -10,7 +10,7 @@ services:
       - MONGO_DB_USERNAME=${MONGO_DB_USERNAME}
       - MONGO_DB_PASSWORD=${MONGO_DB_PASSWORD}
       - MONGO_DB_DATABASE=network
-      - IPTALBES_LEGACY=true
+      - IPTALBES_LEGACY=false
     depends_on:
       - mongodb
     network_mode: "host"
